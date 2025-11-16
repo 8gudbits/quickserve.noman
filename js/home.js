@@ -5,7 +5,7 @@ class QuickServeClient {
     this.password = sessionStorage.getItem("quickserve_password");
 
     if (!this.serverUrl || !this.username) {
-      window.location.href = "login.html";
+      window.location.href = "/login";
       return;
     }
 
@@ -28,13 +28,13 @@ class QuickServeClient {
 
   updateURL(path) {
     const newHash = path ? `#${path}` : "";
-    const newURL = `home.html${newHash}`;
+    const newURL = `/home${newHash}`;
     window.history.replaceState({ path }, "", newURL);
   }
 
   navigateToPath(path) {
     const newHash = path ? `#${path}` : "";
-    const newURL = `home.html${newHash}`;
+    const newURL = `/home${newHash}`;
     window.history.pushState({ path }, "", newURL);
     this.loadFiles(path);
   }
@@ -63,6 +63,7 @@ class QuickServeClient {
         `${this.serverUrl}/api/files?path=${encodeURIComponent(path)}`,
         {
           headers: this.getAuthHeaders(),
+          credentials: "include",
         }
       );
 
@@ -154,6 +155,7 @@ class QuickServeClient {
         )}`,
         {
           headers: this.getAuthHeaders(),
+          credentials: "include",
         }
       );
 
@@ -186,13 +188,13 @@ class QuickServeClient {
     try {
       const response = await fetch(`${this.serverUrl}/api/upload`, {
         method: "POST",
-        headers: this.getAuthHeaders(false),
+        credentials: "include",
         body: formData,
       });
 
       if (response.ok) {
         await this.loadFiles(currentPath);
-        this.showTempMessage("Upload successful!");
+        this.showSuccess("Upload successful!");
       } else {
         throw new Error("Upload failed");
       }
@@ -206,12 +208,16 @@ class QuickServeClient {
     if (isJson) {
       headers["Content-Type"] = "application/json";
     }
+
+    const authString = btoa(`${this.username}:${this.password}`);
+    headers["Authorization"] = `Basic ${authString}`;
+
     return headers;
   }
 
   handleAuthError() {
     sessionStorage.clear();
-    window.location.href = "login.html";
+    window.location.href = "/login";
   }
 
   formatFileSize(bytes) {
@@ -233,16 +239,75 @@ class QuickServeClient {
   }
 
   showError(message) {
-    alert(message);
+    this.showToast(message, "error");
+  }
+
+  showSuccess(message) {
+    this.showToast(message, "success");
+  }
+
+  showInfo(message) {
+    this.showToast(message, "info");
+  }
+
+  showToast(message, type = "info", duration = 5000) {
+    const toastContainer = document.getElementById("toastContainer");
+
+    const toast = document.createElement("div");
+    toast.className = `toast toast-${type}`;
+
+    let icon = "info-circle";
+    if (type === "success") icon = "check-circle";
+    if (type === "error") icon = "exclamation-circle";
+
+    toast.innerHTML = `
+      <i class="fas fa-${icon} toast-icon"></i>
+      <div class="toast-content">${message}</div>
+      <button class="toast-close" aria-label="Close notification">
+        <i class="fas fa-times"></i>
+      </button>
+    `;
+
+    toastContainer.appendChild(toast);
+
+    let removeTimeout;
+    if (duration > 0) {
+      removeTimeout = setTimeout(() => {
+        this.removeToast(toast);
+      }, duration);
+    }
+
+    const closeBtn = toast.querySelector(".toast-close");
+    closeBtn.addEventListener("click", () => {
+      if (removeTimeout) clearTimeout(removeTimeout);
+      this.removeToast(toast);
+    });
+
+    return toast;
+  }
+
+  removeToast(toast) {
+    toast.classList.add("hiding");
+    setTimeout(() => {
+      if (toast.parentNode) {
+        toast.parentNode.removeChild(toast);
+      }
+    }, 300);
   }
 
   showTempMessage(message) {
     const uploadLabel = document.getElementById("uploadLabel");
     const originalText = uploadLabel.innerHTML;
-    uploadLabel.innerHTML = `<i class="fas fa-check"></i> ${message}`;
+
+    this.showSuccess(message);
+
+    uploadLabel.innerHTML = `<i class="fas fa-check"></i> Uploaded`;
+    uploadLabel.style.opacity = "0.7";
+
     setTimeout(() => {
       uploadLabel.innerHTML = originalText;
-    }, 2000);
+      uploadLabel.style.opacity = "1";
+    }, 1500);
   }
 
   updateNavigation(currentPath) {
@@ -278,7 +343,7 @@ class QuickServeClient {
     document.getElementById("logoutLink").addEventListener("click", (e) => {
       e.preventDefault();
       sessionStorage.clear();
-      window.location.href = "login.html";
+      window.location.href = "/login";
     });
 
     window.addEventListener("popstate", (event) => {
